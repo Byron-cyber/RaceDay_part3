@@ -1,0 +1,373 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>RaceDay.Api</name>
+    </assembly>
+    <members>
+        <member name="P:RaceDay.Api.Common.ApiControllerBase.CurrentUserId">
+            <summary>Id of the logged-in user (read from the session cookie claims).</summary>
+        </member>
+        <member name="T:RaceDay.Api.Common.ApiError">
+            <summary>Consistent error shape for every endpoint: { "message": "...", "errors": { ... } }.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Common.RoleNames">
+            <summary>The two roles in the system (see Roles table in Part 1).</summary>
+        </member>
+        <member name="T:RaceDay.Api.Common.Mappers">
+            <summary>Converts database entities to DTOs so password hashes and navigation loops never leave the API.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Common.TimeOnlyJsonConverter">
+            <summary>Accepts "HH:mm" and "HH:mm:ss" (as in the Part 1 plan) and writes "HH:mm:ss".</summary>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.AuthController">
+            <summary>Register, log in and log out. Login starts a cookie-based session that stores the user's id and role.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.AuthController.Register(RaceDay.Api.Dtos.RegisterRequest)">
+            <summary>Create a new account as either an Organiser or a Participant.</summary>
+            <remarks>
+            Expects first name, last name, email, password (min 8 characters), role ("Organiser" or "Participant"),
+            and optionally phone number and date of birth (YYYY-MM-DD). The password is hashed before it is stored.
+            </remarks>
+            <returns>201 with the new user (never the password), 400 for invalid data, 409 if the email is already registered.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.AuthController.Login(RaceDay.Api.Dtos.LoginRequest)">
+            <summary>Log in with email and password.</summary>
+            <remarks>
+            On success a session cookie is issued. The browser (and Swagger UI) sends it automatically on later
+            requests, which keeps the user's identity and role for the whole session.
+            </remarks>
+            <returns>200 with the session lifetime and user details, 401 for wrong email or password.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.AuthController.Logout">
+            <summary>End the current session.</summary>
+            <returns>204 when logged out, 401 if there was no session.</returns>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.CategoriesController">
+            <summary>Age / distance categories within an event (e.g. 10km, 21km, Under 20).</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.CategoriesController.GetEventCategories(System.Int32)">
+            <summary>List the categories of an event (everyone).</summary>
+            <returns>200 with an array of categories, 404 if the event does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.CategoriesController.GetCategory(System.Int32)">
+            <summary>Get one category together with its parent event (everyone).</summary>
+            <returns>200 with the category and event, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.CategoriesController.CreateCategory(System.Int32,RaceDay.Api.Dtos.CreateCategoryRequest)">
+            <summary>Add a category to an event you own (Organisers only).</summary>
+            <remarks>
+            Expects name and distanceKm (greater than 0). Optional: entryFee, ageMin, ageMax,
+            genderRestriction (None, Male, Female) and maxEntries.
+            </remarks>
+            <returns>201 with the category, 400 for invalid data, 403 if not your event, 404 if the event does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.CategoriesController.UpdateCategory(System.Int32,RaceDay.Api.Dtos.UpdateCategoryRequest)">
+            <summary>Update a category of an event you own. Only the fields you send are changed.</summary>
+            <returns>200 with the updated category, 400 for invalid data, 403 if not your event, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.CategoriesController.DeleteCategory(System.Int32)">
+            <summary>Delete a category of an event you own, only if nobody has enrolled in it.</summary>
+            <returns>204 when deleted, 403 if not your event, 404 if it does not exist, 409 if it already has enrolments.</returns>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.EnrolmentsController">
+            <summary>Participants enter event categories. Organisers view and manage the enrolments for their events.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.CreateEnrolment(RaceDay.Api.Dtos.CreateEnrolmentRequest)">
+            <summary>Enter an event category as the logged-in Participant.</summary>
+            <remarks>
+            Expects categoryId and optional notes. The system records the link between the participant, the event
+            (through the category) and the selected category. The event must be Published, the category and event must
+            not be full, and your age (from your profile date of birth) must fit the category's age limits.
+            If you previously cancelled this enrolment it is re-activated.
+            </remarks>
+            <returns>
+            201 with the enrolment, 400 if the event is not open or the age does not fit, 403 for Organisers,
+            404 if the category does not exist, 409 if already enrolled or full.
+            </returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.GetMyEnrolments">
+            <summary>List all of the logged-in Participant's own enrolments, with event and category details.</summary>
+            <returns>200 with an array of enrolments, 401 if not logged in, 403 for Organisers.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.GetEventEnrolments(System.Int32)">
+            <summary>List every enrolment for an event you own, with participant info (Organisers only).</summary>
+            <returns>200 with an array of enrolments, 403 if not your event, 404 if the event does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.GetEnrolment(System.Int32)">
+            <summary>Get one enrolment. Participants can view their own; Organisers can view any under their events.</summary>
+            <returns>200 with the enrolment, 403 if it is not yours, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.CancelEnrolment(System.Int32)">
+            <summary>Cancel an enrolment (status becomes "Cancelled").</summary>
+            <remarks>A Participant can cancel their own; an Organiser can cancel any enrolment under their events.</remarks>
+            <returns>200 with the updated enrolment, 400 if the race is already completed, 403 if not allowed, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.AssignBib(System.Int32,RaceDay.Api.Dtos.AssignBibRequest)">
+            <summary>Assign or change the bib number of an enrolment (Organiser of the event only).</summary>
+            <returns>200 with the updated enrolment, 403 if not your event, 404 if it does not exist, 409 if the bib is already used in this event.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EnrolmentsController.CanAccess(RaceDay.Api.Models.Enrolment)">
+            <summary>A participant can access their own enrolment; an organiser can access enrolments under their events.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.EventsController">
+            <summary>Browse events (everyone) and manage events (Organisers, own events only).</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.GetEvents(System.String,System.String,System.String,System.Nullable{System.DateOnly},System.Nullable{System.DateOnly},System.String,System.Int32,System.Int32)">
+            <summary>List events that are open to the public (Draft events are never listed).</summary>
+            <remarks>
+            Optional filters: city, province, eventType (Run, Walk, Cycle), dateFrom, dateTo (YYYY-MM-DD), status (Published, Cancelled, Completed).
+            Pagination: page (default 1) and pageSize (default 20, max 100). The total number of matches is returned
+            in the X-Total-Count response header.
+            </remarks>
+            <returns>200 with an array of event summaries ordered by date.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.GetEvent(System.Int32)">
+            <summary>Get the full details of one event, including its categories.</summary>
+            <remarks>Draft events are only visible to the Organiser who owns them.</remarks>
+            <returns>200 with the event and its categories, 404 if it does not exist (or is someone else's draft).</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.GetMyEvents">
+            <summary>List every event created by the logged-in Organiser (including drafts).</summary>
+            <returns>200 with an array of events, 401 if not logged in, 403 for Participants.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.CreateEvent(RaceDay.Api.Dtos.CreateEventRequest)">
+            <summary>Create a new event (Organisers only). The logged-in Organiser becomes its owner.</summary>
+            <remarks>
+            Expects title, eventDate (YYYY-MM-DD), location, city and province. Optional: description,
+            startTime (HH:mm), eventType ("Run" (default), "Walk" or "Cycle"), distanceKm, status ("Draft" or "Published",
+            default Draft) and maxParticipants. The banner image is uploaded separately with POST /api/events/{id}/banner.
+            </remarks>
+            <returns>201 with the created event, 400 for invalid data, 401 if not logged in, 403 for Participants.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.UpdateEvent(System.Int32,RaceDay.Api.Dtos.UpdateEventRequest)">
+            <summary>Update an event you own. Only the fields you send are changed.</summary>
+            <returns>200 with the updated event, 400 for invalid data, 403 if it is not your event, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.UploadBanner(System.Int32,RaceDay.Api.Dtos.ImageUploadRequest,System.Threading.CancellationToken)">
+            <summary>Upload or replace the banner image of an event you own (Organisers only).</summary>
+            <remarks>
+            Send the image as multipart/form-data in a field called "file" (JPG, PNG or WebP, max 5 MB).
+            The image is stored in Azure Blob Storage and the event's imageUrl is set to the path that serves it.
+            </remarks>
+            <returns>200 with the updated event, 400 for an invalid image, 403 if it is not your event, 404 if it does not exist, 503 if image storage is unavailable.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.DeleteEvent(System.Int32)">
+            <summary>Cancel an event you own (its status becomes "Cancelled"; the data is kept).</summary>
+            <returns>204 when cancelled, 403 if it is not your event, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.EventsController.CanSee(RaceDay.Api.Models.Event)">
+            <summary>Draft events are only visible to their owner.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.HealthController.Get">
+            <summary>Simple health check used by CI/CD and monitoring.</summary>
+            <returns>200 with { "status": "Healthy" }.</returns>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.ImagesController">
+            <summary>Serves images stored in Azure Blob Storage. Clients never talk to Azure directly.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ImagesController.GetImage(System.String,System.Threading.CancellationToken)">
+            <summary>Get an uploaded image (event banner or profile picture) by its path.</summary>
+            <remarks>Use the path returned in an event's imageUrl or a user's profilePictureUrl, e.g. /api/images/events/abc.jpg.</remarks>
+            <returns>200 with the image, 404 if it does not exist, 503 if image storage is unavailable.</returns>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.ResultsController">
+            <summary>Organisers capture finish times and positions. Participants view their own results.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.CreateResult(RaceDay.Api.Dtos.CreateResultRequest)">
+            <summary>Capture the result of an enrolment (Organiser of the event only).</summary>
+            <remarks>
+            Expects enrolmentId and status ("Finished", "DNF", "DNS" or "DQ"). A "Finished" result needs finishTime (HH:mm:ss).
+            Optional: overallPosition, categoryPosition, chipTime, gunTime. There can only be one result per enrolment.
+            A finished result marks the enrolment as Completed.
+            </remarks>
+            <returns>201 with the result, 400 for invalid data, 403 if not your event, 404 if the enrolment does not exist, 409 if a result already exists.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.GetMyResults">
+            <summary>List the logged-in Participant's race history: their results for events whose results have been published.</summary>
+            <remarks>Each result includes the event, category, finish time, overall position and totalFinishers (for "47th of 312").</remarks>
+            <returns>200 with an array of results, 401 if not logged in, 403 for Organisers.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.GetEventResults(System.Int32)">
+            <summary>The results list for an event, best position first.</summary>
+            <remarks>
+            Everyone can see the results once the Organiser has published them (the event status is "Completed").
+            Before that, only the Organiser who owns the event can see them.
+            </remarks>
+            <returns>200 with an ordered array of results, 404 if the event does not exist or its results are not published yet.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.GetResult(System.Int32)">
+            <summary>Get one result. Participants can view their own; Organisers can view results under their events.</summary>
+            <returns>200 with the result, 403 if it is not yours, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.UpdateResult(System.Int32,RaceDay.Api.Dtos.UpdateResultRequest)">
+            <summary>Correct a result you captured (e.g. fix a time or status). Only the fields you send are changed.</summary>
+            <returns>200 with the updated result, 400 for invalid data, 403 if not your event, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.DeleteResult(System.Int32)">
+            <summary>Remove a result you captured.</summary>
+            <returns>204 when removed, 403 if not your event, 404 if it does not exist.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.ResultsController.ToDtosAsync(System.Collections.Generic.List{RaceDay.Api.Models.Result})">
+            <summary>Converts results to DTOs and fills in how many people finished each event.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Controllers.UsersController">
+            <summary>View and update your own profile. Organisers can look up other users.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.UsersController.GetMyProfile">
+            <summary>Get the profile of the logged-in user.</summary>
+            <returns>200 with the profile (no password hash), 401 if not logged in.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.UsersController.UpdateMyProfile(RaceDay.Api.Dtos.UpdateProfileRequest)">
+            <summary>Update your own first name, last name, phone number and date of birth.</summary>
+            <remarks>The email address and role cannot be changed.</remarks>
+            <returns>200 with the updated profile, 400 for invalid data, 401 if not logged in.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.UsersController.UploadProfilePicture(RaceDay.Api.Dtos.ImageUploadRequest,System.Threading.CancellationToken)">
+            <summary>Upload or replace your own profile picture.</summary>
+            <remarks>Send the image as multipart/form-data in a field called "file" (JPG, PNG or WebP, max 5 MB). It is stored in Azure Blob Storage.</remarks>
+            <returns>200 with the updated profile, 400 for an invalid image, 401 if not logged in, 503 if image storage is unavailable.</returns>
+        </member>
+        <member name="M:RaceDay.Api.Controllers.UsersController.GetUser(System.Int32)">
+            <summary>Get limited public information about a user (Organisers only).</summary>
+            <returns>200 with name, email and role, 403 for Participants, 404 if the user does not exist.</returns>
+        </member>
+        <member name="T:RaceDay.Api.Data.ApplicationDbContext">
+            <summary>
+            EF Core Code-First model. Table names, column sizes, keys, unique indexes,
+            check constraints and delete behaviour mirror docs/RaceDay_Database.sql from Part 1.
+            </summary>
+        </member>
+        <member name="T:RaceDay.Api.Data.DbSeeder">
+            <summary>
+            Inserts demo data (same people and events as the Part 1 SQL script) the first time the API runs in
+            Development, so you can try every endpoint straight away. Every demo user has the password: Password123!
+            </summary>
+        </member>
+        <member name="T:RaceDay.Api.Dtos.RegisterRequest">
+            <summary>Details needed to create an account.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.RegisterRequest.Password">
+            <summary>At least 8 characters. Stored hashed, never in plain text.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.RegisterRequest.Role">
+            <summary>Must be exactly "Organiser" or "Participant".</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.RegisterRequest.DateOfBirth">
+            <summary>Format YYYY-MM-DD.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.LoginResponse.ExpiresIn">
+            <summary>Lifetime of the session cookie in seconds.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.UserDto.ProfilePictureUrl">
+            <summary>Path of the profile picture served by this API (GET /api/images/...). Null if none.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Dtos.UserSummaryDto">
+            <summary>Limited user information shown to organisers.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.EnrolmentDto.Participant">
+            <summary>Only filled in for organiser views.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.ResultDto.TotalFinishers">
+            <summary>How many participants finished the whole event (used to show e.g. "47th of 312").</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateResultRequest.FinishTime">
+            <summary>Format HH:mm:ss. Required when Status is "Finished".</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateResultRequest.Status">
+            <summary>Finished (default), DNF, DNS or DQ.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Dtos.UpdateResultRequest">
+            <summary>All fields optional: only the fields you send are changed.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.EventDto.EventType">
+            <summary>Run, Walk or Cycle.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.EventDto.DistanceKm">
+            <summary>Headline distance of the event in km.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.EventDto.ImageUrl">
+            <summary>Path of the banner image served by this API (GET /api/images/...). Null if no banner.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.EventDto.EnrolmentCount">
+            <summary>Number of active (not cancelled) enrolments. Only filled in for GET /api/events/my.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateEventRequest.EventDate">
+            <summary>Format YYYY-MM-DD.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateEventRequest.StartTime">
+            <summary>Format HH:mm.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateEventRequest.Status">
+            <summary>"Draft" (default) or "Published".</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateEventRequest.EventType">
+            <summary>"Run" (default), "Walk" or "Cycle".</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateEventRequest.DistanceKm">
+            <summary>Headline distance in km (optional).</summary>
+        </member>
+        <member name="T:RaceDay.Api.Dtos.UpdateEventRequest">
+            <summary>All fields optional: only the fields you send are changed.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.UpdateEventRequest.Status">
+            <summary>Draft, Published, Cancelled or Completed.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.UpdateEventRequest.EventType">
+            <summary>Run, Walk or Cycle.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateCategoryRequest.DistanceKm">
+            <summary>Distance in kilometres, must be greater than 0.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Dtos.CreateCategoryRequest.GenderRestriction">
+            <summary>None (default), Male or Female.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Dtos.UpdateCategoryRequest">
+            <summary>All fields optional: only the fields you send are changed.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Dtos.ImageUploadRequest">
+            <summary>An image file sent as multipart/form-data (JPG, PNG or WebP, max 5 MB).</summary>
+        </member>
+        <member name="P:RaceDay.Api.Models.Event.EventType">
+            <summary>Run, Walk or Cycle (Part 3 addition).</summary>
+        </member>
+        <member name="P:RaceDay.Api.Models.Event.DistanceKm">
+            <summary>Headline distance of the event in km (Part 3 addition). Each category also has its own distance.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Models.Result">
+            <summary>Maps to the Results table from Part 1 (one result per enrolment).</summary>
+        </member>
+        <member name="P:RaceDay.Api.Models.User.PasswordHash">
+            <summary>Hashed password. The plain password is never stored.</summary>
+        </member>
+        <member name="P:RaceDay.Api.Models.User.ProfilePictureUrl">
+            <summary>Path of the profile picture stored in Azure Blob Storage (Part 3 addition).</summary>
+        </member>
+        <member name="T:RaceDay.Api.Services.BlobStorageOptions">
+            <summary>Settings in appsettings.json section "AzureBlob".</summary>
+        </member>
+        <member name="P:RaceDay.Api.Services.BlobStorageOptions.ConnectionString">
+            <summary>Azure Storage connection string. "UseDevelopmentStorage=true" targets the local Azurite emulator.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Services.IBlobStorageService">
+            <summary>All file handling goes through this interface (the MVC app never talks to Azure directly).</summary>
+        </member>
+        <member name="M:RaceDay.Api.Services.IBlobStorageService.UploadAsync(System.String,System.IO.Stream,System.String,System.String,System.Threading.CancellationToken)">
+            <summary>Uploads a file and returns the blob name, e.g. "events/3f2a....jpg".</summary>
+        </member>
+        <member name="M:RaceDay.Api.Services.IBlobStorageService.DownloadAsync(System.String,System.Threading.CancellationToken)">
+            <summary>Downloads a blob, or returns null if it does not exist.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Services.AzureBlobStorageService">
+            <summary>Azure Blob Storage implementation. The container is private; images are served through the API.</summary>
+        </member>
+        <member name="T:RaceDay.Api.Services.ImageUploads">
+            <summary>Validation and path helpers shared by the banner and profile-picture endpoints.</summary>
+        </member>
+        <member name="M:RaceDay.Api.Services.ImageUploads.ValidateAsync(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>Checks size, content type and the real file signature (so a renamed .exe is rejected).</summary>
+        </member>
+        <member name="M:RaceDay.Api.Services.ImageUploads.ToBlobName(System.String)">
+            <summary>Turns "/api/images/events/abc.jpg" back into the blob name "events/abc.jpg".</summary>
+        </member>
+    </members>
+</doc>
